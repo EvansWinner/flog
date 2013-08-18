@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+###############################################################
+#
+#  Personalize these variables
+#
+#  Run ./flog `help' for a help page and more info.
+#
+	
+
+readonly indexpage="index.html"
+readonly baseurl="http://www.yoursite.com/me/blog"
+readonly homepageurl="http://www.yoursite.com/me"
+readonly rssname="blog.rss"
+readonly cssname="css/flog.css"
+readonly author="you"
+readonly flogdir="/var/www/html/me/blog"
+readonly flogtitle="My Wonderful Blog"
+readonly flogdescription="Me talking about wonderful me."
+readonly sig="<BR>Joe Blow<BR><A HREF="mailto:joe@yoursite.com">joe@yoursite.com</A><BR>Deadcat, Nevada<BR>"
+readonly entriesperpage="5"
+readonly rsslength="100"
+readonly archivepage="archive.html"

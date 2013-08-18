@@ -1,0 +1,527 @@
+#!/bin/bash
+###############################################################
+#  Personalize the variables in an init file called
+#  yourtitle.flog
+#  and run `./flog help'
+#  for information.
+###############################################################
+
+# Don't mess with stuff below here unless you know what you are doing.
+readonly flogversion="0.2.0"
+readonly debug=no
+###############################################################
+#          Functions...
+###############################################################
+
+# Make a new file for the source called title.flog.date with underscores in place of spaces in the title.
+# Sets $flogsrc to the name of the new file.
+# Use:  mkflogfile $entrytitle $entrytxtfile
+
+mkflogfile ()
+{
+    echo "Creating base entry file:"
+    foo=`echo "$1" | sed "s/ /_/g"`
+    export flogsrc="$foo.flog.$rundate"
+    echo "    $flogsrc..."
+    cp "$2" "$flogdir/$flogsrc"
+    echo "                                                                  [  OK  ]"
+}
+
+# Make the new entry in XML
+mkxml ()
+{
+    echo -n "Making xml file:                   $entrytime.xml....... "
+    if echo "<item><title>$realtitle</title><link>$baseurl/$entrytime.html</link><guid isPermaLink=\"true\">$baseurl/$entrytime.html</guid><description><![CDATA["> $flogdir/$entrytime.xml; then echo "[  OK  ]"; fi
+    cat $2 |  sed "s/$/\<br\/\>/g" >> $2.tmp
+    cat $2.tmp >> $flogdir/$entrytime.xml
+    rm -f $2.tmp
+
+    # A bit of a hack because rss validators don't like the date in non-rfc-822 format.  Bollox to them.  
+    newdate=`echo $entrytime | sed "s/\./-/1" | sed "s/\./-/1" | sed "s/\./ /1" | sed "s/\./:/1" | sed "s/\./:/1"`;rfcdate=`date -R --date="$newdate"`
+    echo "]]></description><pubDate>$rfcdate</pubDate></item>" >> $flogdir/$entrytime.xml
+}
+
+# Make the pre-HTML entry
+# mkprehtml "$realtitle" "$1" "$entrytime"
+mkprehtml ()
+{
+    echo -n "Making psuedo-html page:           $entrytime.prehtml... "
+    echo "<h3>"$1"</h3>" > $flogdir/$entrytime.prehtml
+    cat $2 | sed "s/$/<br\/>/" >> $flogdir/$entrytime.prehtml
+    echo "$sig$3  <a href=\"$baseurl/$entrytime.html\">Permalink</a><hr/>" >> $flogdir/$entrytime.prehtml
+    echo "[  OK  ]"
+
+    # HACK: This is so mkblog and mkerchive  have something to work with...
+    ls -1r $flogdir/*.prehtml > $flogdir/prehtml.ls
+}
+
+# Make permalink page
+mkhtml ()
+{
+    echo -n "Making html page for single entry: $entrytime.html...... "
+    echo "
+<!-- Generated automatically by flog $flogversion -->
+<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\"
+    \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">
+
+<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">
+ <head>
+  <title>$flogtitle $1</title>
+  <link rel=\"stylesheet\" type=\"text/css\" href=\"$cssname\"/>
+ </head>
+<body>
+ <div>
+  <h2>$flogtitle</h2>
+  <h3>$flogdescription</h3>
+" > $flogdir/$entrytime.html
+
+    cat $flogdir/$entrytime.prehtml >> $flogdir/$entrytime.html
+    echo "<a href=\"$homepageurl\">Home</a> | <a href=\"$baseurl\">Blog</a> | <a href=\"$baseurl/$archivepage\">Archive</a></div></body></html>" >> $flogdir/$entrytime.html
+    echo "[  OK  ]"
+}
+
+# Make an rss feed
+mkrss ()
+{
+    echo -n "Building rss feed................................................ "
+    echo "<?xml version=\"1.0\"?>
+       <rss version=\"2.0\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">
+         <channel>
+           <language>en-us</language>
+           <copyright>Copyright `date -R`, $author.  All rights reserved.</copyright>
+           <title>$flogtitle</title>
+           <pubDate>`date -R`</pubDate>
+           <lastBuildDate>`date -R`</lastBuildDate>
+           <generator>flog $flogversion</generator>
+           <link>$baseurl/$indexpage</link>
+           <description>$flogdescription</description>
+
+    " > $flogdir/$rssname
+    ls -1r $flogdir/*.xml > $flogdir/xml.ls
+    head -n $rsslength $flogdir/xml.ls | xargs cat >> $flogdir/$rssname
+    echo "</channel></rss>" >> $flogdir/$rssname
+    echo "[  OK  ]"
+}
+
+# Make the blog...
+mkblog ()
+{
+    echo -n "Building blog.................................................... "
+    echo "
+<!-- Generated automatically by flog $flogversion -->
+<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\"
+    \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">
+
+<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">
+ <head>
+  <title>$flogtitle</title>
+  <link rel=\"stylesheet\" type=\"text/css\" href=\"$cssname\"/>
+ </head>
+
+ <body>
+ <div>
+  <h2>$flogtitle</h2>
+  <h3>$flogdescription</h3>
+  <a href=\"$homepageurl\">Home</a> | <a href=\"$baseurl/$archivepage\">Archive</a> | <a href=\"$baseurl/$rssname\">Valid rss 2.0</a>
+  <hr/>  
+       " > $flogdir/$indexpage
+    head -n $entriesperpage $flogdir/prehtml.ls |  xargs cat >> $flogdir/$indexpage
+    echo "<a href=\"$homepageurl\">Home</a> | <a href=\"$baseurl/$archivepage\">Archive</a> | <a href=\"$baseurl/$rssname\">Valid rss 2.0</a></div></body></html>" >> $flogdir/$indexpage
+    echo "[  OK  ]"
+}
+
+# Make the archive...
+mkarchive ()
+{
+    echo -n "Building archive................................................. "
+    head -n $entriesperpage $flogdir/prehtml.ls > $flogdir/prehead
+    diff $flogdir/prehead $flogdir/prehtml.ls > $flogdir/archive.ls
+    echo "
+<!-- Generated automatically by flog $flogversion -->
+<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\"
+    \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">
+ <head>
+  <title>$flogtitle - archive</title>
+  <link rel=\"stylesheet\" type=\"text/css\" href=\"$cssname\"/>
+ </head>
+<body>
+ <div>
+  <h2>$flogtitle</h2>
+  <h3>$flogdescription</h3>
+  <a href=\"$homepageurl\">Home</a> | <a href=\"$baseurl/$indexpage\">Blog</a> | <a href=\"$baseurl/$rssname\">Valid rss 2.0</a>
+  <hr/>  
+       " > $flogdir/$archivepage
+    diff -e $flogdir/prehead $flogdir/prehtml.ls | grep prehtml | xargs cat >> $flogdir/$archivepage
+    echo "<a href=\"$homepageurl\">Home</a> | <a href=\"$baseurl/$indexpage\">Blog</a> | <a href=\"$baseurl/$rssname\">Valid rss 2.0</a></div></body></html>" >> $flogdir/$archivepage
+    echo "[  OK  ]"
+}
+
+# Add the entry 
+# addentry $source-file
+addentry ()
+{
+    # Get the title into a variable...
+    foo=`ls -1r $flogdir | grep "$1"`
+    bar=`echo "$foo" | sed "s/_/ /g"`
+    baz=`echo "$bar" | grep -o ".*\.flog"`
+    realtitle=`echo "$baz" | head -c -6`
+
+    # Get the date into a variable
+    qak=`echo "$flogdir/$1" | grep -o "flog\..*"` 
+    export entrytime=`echo "$qak" | tail -c 20`
+
+    # Make the entry
+    mkxml "$realtitle" "$flogdir/$1" "$entrytime"
+    mkprehtml "$realtitle" "$flogdir/$1" "$entrytime"
+    mkhtml "$realtitle" "$flogdir/$1" "$entrytime"
+}
+
+build ()
+{
+    mkrss
+    mkblog
+    mkarchive
+}
+
+rebuild ()
+{
+    #clean up first:
+    cd $flogdir
+    rm -f *.xml *.prehtml *.html *.rss *.ls
+
+    files=`ls -1r $flogdir/*.flog.*`
+    for entry in $files
+    do 
+	echo
+	echo "Rebuilding $entry"
+	addentry `basename $entry`
+	echo
+    done
+}
+
+quickhelp ()
+{
+    echo "
+flog $flogversion -- Update and manage weblogs.
+
+USE
+
+\`flog :init /path/init-file :title \"title in quotes\" :post /path/file-to-post
+      [:date YYYY.MM.DD.24.MM.SS]'
+\`flog :rebuild init-file-path'
+
+or \`flog help' for detailed help.
+
+For debugging purposes, your command line was:
+$0 $@
+
+thorne@timbral.net
+"
+    exit 0
+}
+
+help ()
+{
+    echo "
+
+flog $flogversion 
+
+Update and manage weblogs.
+
+DESCRIPTION
+     \`flog' is a blogging tool written in the bash scripting
+     language for use in unix/linux at the command line.
+     You do not need root access, but you do need access
+     to a directory for your own web site, like public_html
+     or /var/www/html/mysite...  
+
+USE 
+     flog [:init /path/init-file] :title \"title in quotes\"
+          :post /path/text-file-to-post [:date YYYY.MM.DD.24.MM.SS]
+
+     is the basic use to add a new posting to a blog.  
+
+
+     flog :rebuild init-file-path
+
+     to rebuild blog from source post files.
+
+     or \`flog help' for this detailed help.
+
+     \`flog' by itself gets a short help message.  
+
+
+     For normal use:
+
+     The command line uses lisp-like \`:keyword value' pairs.  Pairs
+     may be in any order, but any time a keyword appears you MUST supply
+     a value.  Odd numbers of command-line arguments will make things go
+     wrong.  Valid keywords are
+
+          :title :post :rebuild :date :init
+
+
+:init  --  Optional (though the init file itself is not).  This is
+           the path and filename to the init fle for the blog
+           currently being updated or rebuilt.  You can have as many
+           different blogs as you want to make init files for.
+           (Note that they must point to different directories, or
+           else posts will get mixed up.)  A dummy init file is
+           included called foo.flog.  It should be easy to copy this
+           to a new file name, like myblog.flog and customize the
+           variables.  If no init file is specified, flog will try
+           the first file it finds in the current directory that ends
+           in \`.flog'.  If it can't find anything, it will fail out.
+
+:title --  The value is the title of your current blog posting.  If
+           it is more than one word it must be surrounded by
+           double-quotes.  Best just to always use the quotes.  Note,
+           do not use the underscore (\`_') character, as it is used
+           internally for text processing.  And strange characters like
+          \`!' and bracket characters should be avoided as they can have
+           odd and not always good results. (This does not seem to
+           always apply when posts are made from \`flogger\'--the tcl/tk
+           frontend for flog.  There you can use all the exclamation
+           points you want. 
+           :title is required for any new post.  It cannot be left
+           blank.
+
+:post  --  This is the path to the plain text file you have saved the
+           actual text of your blog post to.  This, like :title, is 
+           not optional.
+
+:date  --  Optional.  If you want to back-date a post, or for whatever
+           reason, include :date.  The value for date MUST be in the
+           following format: YYYY.MM.DD.HH.MM.SS  -- this is not
+           optional.  Note, dots seperate each field, and that hours is
+           in 24-hour format, and that single-digit numbers like \`1' for
+           the month of Jan, should be preceeded by a \`0', as in, \`01'.
+           Once you have added the dated entry, you may need to rebuild
+           the blog to get everything in the proper order.
+
+EXAMPLES
+     Adding a normal entry:
+
+     flog :init ~/myblog.flog :title \"A day in my life\" :post ~/tuesday.txt
+
+     A backdated entry:
+
+     flog :init me.flog :title \"Ulysses\" :post foo.txt :date 2004.04.23.14.59.05
+
+     :rebuild -- Rebuilds all files from the basic entry files.  Value is the
+            same as :init, i.e., the path to the init file for the blog
+            you want to rebuild:
+
+     flog :rebuild myblog.flog
+
+INSTALLATION
+
+     * Probably ought to have basic shell scripting familliarity
+       because this is not very well-written...
+     * Put the script in the place you want to run it from.
+     * Make sure you have write access to wherever you want
+       to have your web pages.  Usually you would want to usfirst
+       make a dedicated subdirectory somewhere in you website and
+       chmod it the right way.
+     * Copy foo.flog to some new .flog name and customize the
+       valiables.  For another blog, make a new copy with a 
+       new name and change the variables to point to the 
+       location of the new blog, the new blog title, etc.
+     * Make yourself .css files if you want to do any fancy
+       layout.
+     * Be ready to tinker a little to get used to how it works.
+
+ENVIRONMENT
+     You will need to customize the variables at the beginning of
+     the script. They're prety self-explanitory.  \`rsslength' is
+     the max number of entries in the rss feed. \`sig' is your
+     html signiture. \`entriesperpage' is the number of entries
+     you want on the main page.
+
+NOTES
+     flog assumes currently that you want a link to your blog
+     homepage on every entry, and a link to a different home
+     page and to the archive.
+
+     flog works by copying your :post file to a new file in the 
+     flog directory with the title and date encoded into the 
+     filename.  These are the source files for the blog.
+
+     To delete an entry, delete the corresponding flog file,
+     which is--
+
+      your_title_with_underscoress.flog.YYYY.MM.DD.HH.MM.SS
+
+     You may also need to delete the .xml, .prehtml and .html 
+     files corresponding to your entry's old date by hand--
+
+     --then run
+
+      ./flog :rebuild your-init-file
+
+
+     Or, if you change something in the script that will effect
+     the html layout, also run 
+ 
+      /flog :rebuild your-init-file
+
+     afterword to automatically apply to all the prelink html
+     files.
+
+     flog makes a one-page blog with the number of entries you
+     specify on it, and puts ALL older entries in one flat archive
+     page.
+
+     To change the date on an entry, first delete the flog file,
+     then re-add it, specifiying the date as the third perameter
+     and then run ./flog :rebuild your-init-file
+
+     And most of all, remember this is just a hack, so don't
+     trust it for anything important.  Back up your entries.
+
+SUPPORT
+     flog is by thorne and may be available at
+     timbral.net/thorne
+
+     Try emailing me at thorne@timbral.net.  You never know.
+
+DISCLAIMER
+     You are responsible for anything you do with this code,
+     including bad things.  And I am not trying to suggest anyone
+     use it for anything more than playing around.  It could fail
+     at any time.  You have been warned.
+
+     Try to remember to back up your data.  Really.
+
+
+TO DO
+
+     * Add a delete entry function to automate that.
+     * Add a CGI script for making entries from the web?
+     * Make a procmail file for emailing entries?
+     * Add some rudimentary error checking and handling
+     * A better archiving system?  Hello?  Obvious?  I
+       think so.
+     * xsl for customizing thr html aspect?
+
+Press \`q' to exit.
+         " | less
+}
+
+##################################################################
+#         The script...
+##################################################################
+
+##################################################################
+#  Parse the command line...
+##################################################################
+
+# Debug info
+if [ "$debug" = "yes" ]; then
+    echo "For debugging purposes, the command line was: 
+    \$0 = $0 
+    \$1 = $1
+    \$2 = $2 
+    \$3 = $3
+    \$4 = $4
+    \$5 = $5 
+    \$6 = $6
+    "
+    echo
+fi
+
+# IRREGULAR OPTIONS
+# Rebuild?
+if [ "$1" = ":rebuild" ]; then
+    . $2
+    rebuild
+    echo "Rebuilding blog..."
+    build
+    exit 0
+fi
+
+# Nothing on the command line?
+if [ "$1" = "" ]; then
+    quickhelp
+fi
+
+# Help?
+if [ "$1" = "help" ]; then
+    help
+    exit 0
+fi
+
+# Ok, we want to add an entry.  So parse the command line.
+# Get the date/time... generate it, or use the one supplied after :date on the command line...
+if [ "$1" = ":date" ]; then
+    export rundate="$2"
+elif [ "$3" = ":date" ]; then
+    export rundate="$4"
+elif [ "$5" = ":date" ]; then
+    export rundate="$6"
+elif [ "$7" = ":date" ]; then
+    export rundate="$8"
+else
+    export rundate=`date +"%Y.%m.%d.%H.%M.%S"`
+fi
+
+# Load the init file.
+if [ "$1" = ":init" ]; then
+    export init="$2"
+elif [ "$3" = ":init" ]; then
+    export init="$4"
+elif [ "$5" = ":init" ]; then
+    export init="$6"
+elif [ "$7" = ":init" ]; then
+    export init="$8"
+else
+    echo "No init file specified..."
+    echo -n "Will try to use the first .flog file found in current directory.."
+    if export init=`ls -1r *.flog 2> /dev/null | head -n 1`; then echo " [  OK  ]"; fi
+fi
+
+if [ -f "$init" ]; then
+    . "$init"
+else
+    echo "Cannot find init file.  Exiting."
+    exit 255
+fi
+
+# Get the title for the entry
+if [ "$1" = ":title" ]; then
+    export entrytitle="$2"
+elif [ "$3" = ":title" ]; then
+    export entrytitle="$4"
+elif [ "$5" = ":title" ]; then
+    export entrytitle="$6"
+elif [ "$7" = ":title" ]; then
+    export entrytitle="$8"
+else
+    echo "No title specified.  Exiting."
+    exit 255
+fi
+
+# Get the blog post source file into a variable.
+if [ "$1" = ":post" ]; then
+    export entrytxtfile="$2"
+elif [ "$3" = ":post" ]; then
+    export entrytxtfile="$4"
+elif [ "$5" = ":post" ]; then
+    export entrytxtfile="$6"
+elif [ "$7" = ":post" ]; then
+    export entrytxtfile="$8"
+else
+    echo "No source file specified.  Exiting."
+    exit 255
+fi
+
+# Exit if not all info is good.  Just in case...
+if [ "$entrytxtfile" = "" ]; then quickhelp; fi
+if [ "$entrytitle" = "" ]; then quickhelp; fi
+if [ "$init" = "" ]; then quickhelp; fi
+
+# The default script: Add an entry and then build the blog.
+mkflogfile "$entrytitle" "$entrytxtfile"
+addentry $flogsrc
+build

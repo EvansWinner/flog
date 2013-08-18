@@ -1,0 +1,192 @@
+#!/usr/bin/wish
+
+set floggerver 0.1.1
+set editor "emacs"
+set flog "~/flog"
+set date ""
+set isdate ""
+
+# String literals
+set generalhelp "\`flogger' is a frontend for \`flog', a command line based blogging tool.  Run \`flog help' from a command line for information about flog.  Before flooger can work, \`flog' must be in your executable search path and at least one init file configured for your site.\n\nthorne@timbral.net 2006.2.7"
+set titlehelp "Enter the title of the particular blog posting you are making. Do not use the underscore character.  Preceed the exclaimation mark with a backslash, and don't use double quotes (they will be added automatically to the beginning and end)."
+set inithelp "Specify the /path/to/initialization/filename.flog to be used to initialize flog.  This is the file in which the variables specific to the particular blog you are posting to are set.  For more information, run \`flog help' at a command line."
+set posthelp "Specify /path/to/the/text-only/filename that contains the text of your blog post."
+set editorhelp "If you want to use a specific text editor, open this script (filename: \`flogger') and change the value of the editor variable in the fourth line of the script to something you like.  Default is \`emacs'."
+
+
+proc rebuild {} {
+    global post title
+
+    .title.banner configure -state disabled
+    .post.banner configure -state disabled
+    .title.help configure -state disabled
+    .title.entry configure -state disabled
+    .post.help configure -state disabled
+    .post.entry configure -state disabled
+    .post.browse configure -state disabled
+    .post.clear configure -state disabled
+    .title.clear configure -state disabled
+    .post.edit configure -state disabled
+    .post.editorhelp configure -state disabled
+
+    set title ""
+    set post ""
+}
+
+proc norebuild {} {
+
+    .title.banner configure -state active
+    .post.banner configure -state active
+    .title.help configure -state active
+    .title.entry configure -state normal
+    .post.help configure -state active
+    .post.entry configure -state normal
+    .post.browse configure -state active
+    .post.clear configure -state active
+    .title.clear configure -state active
+    .post.edit configure -state active
+    .post.editorhelp configure -state active
+}
+
+proc gui {} {
+    # :init
+    pack [frame .init -relief raised -bd 5]
+    pack [label .init.banner -text "INIT FILE (Which blog are you posting to?)"]
+    entry .init.entry -width 50 -textvariable init
+    set init [.init.entry get]
+    pack .init.entry
+    button .init.browse -width 10 -text "Browse" -command {
+	set init [tk_getOpenFile]
+    }
+    pack .init.browse
+    pack [button .init.clear -width 10 -text "Clear" -command {set init ""}]
+    pack [button .init.help -text "Init Help" -width 10 -command {tk_messageBox -type ok -title "Init Help" -message "$inithelp"}]
+
+    # :post
+    pack [frame .post -relief raised -bd 5]
+    pack [label .post.banner -text "POST FILE (What is the name of the text-only file containing\nyour post?  Be sure to include path\nif required.)"]
+    entry .post.entry -width 50 -textvariable post
+    set post [.post.entry get]
+    pack .post.entry
+    button .post.browse -width 10 -text "Browse" -command {
+	set post [tk_getOpenFile]
+    }
+    pack .post.browse
+    pack [button .post.clear -width 10 -text "Clear" -command {set post ""}]
+    pack [button .post.help -width 10 -text "Post Help" -command {tk_messageBox -type ok -title "Post Help" -message "$posthelp"}]
+
+    # editor
+    pack [button .post.edit -width 10 -text "Create Post File" -command {
+	if {"$post" == ""} then {
+	    set post "~/flog.post.default.filename"
+	}
+	exec $editor $post &
+    }]
+    pack [button .post.editorhelp -width 10 -text "Editor Help" -command {tk_messageBox -type ok -title "Editor Help" -message "$editorhelp"}]
+
+    # Title
+    pack [frame .title -relief raised -bd 5]
+    pack [label .title.banner -text "POST TITLE (What is the title of your post?)"]
+    entry .title.entry -width 50 -textvariable title
+    set title [.title.entry get]
+    pack .title.entry
+    pack [button .title.clear -width 10 -text "Clear" -command {set title ""}]
+    pack [button .title.help -width 10 -text "Title Help" -command {tk_messageBox -type ok -title "Title Help" -message "$titlehelp"}]
+
+    # Date (*STUB*)
+    pack [frame .date -relief raised -bd 5]
+    pack [label .date.banner -text "SPECIAL DATE (only if you want your post not dated \`now')" -width 50]
+    pack [button .date.set -width 10 -text "Date" -command {tk_messageBox -type ok -title "Set date" -message "Sorry, backdating is not yet implimented.  This is only a stub.\n\nTo backdate, use \`flog' at the command line."}]
+
+    # Main buttons (quit and go and help)
+    pack [frame .main -borderwidth 30 ]
+    pack [button .main.execute -width 10 -bg green -text Execute -command go]
+    pack [button .main.help -width 10 -text Help -command {tk_messageBox -type ok -title "Help" -message "$generalhelp"}]
+    pack [button .main.exit -width 10 -text Quit -command exit]
+}
+
+proc go {} {
+    global init post title rebuild flog date isdate
+
+    # Make sure there is an init file.
+    if {$init == ""} then {
+	set isinit ""
+	set answer [tk_messageBox -type "okcancel" -title "Confirm" -icon question -message "No init file specified, will try to find one, but may fail or use the wrong one.  Are you sure you want to continue?"]
+	switch $answer {
+	    cancel return
+	}
+    } else {set isinit ":init"
+    }
+
+    # Make sure there is a post file.
+    if {"$rebuild" == "no"} then {
+	if {"$post" == ""} then {
+	    tk_messageBox -type "ok" -title "NO POST FILE SPECIFIED" -message "Must specify a file to post."
+	    return
+	}
+    }
+
+    # Make sure there is a title
+    if {"$rebuild" == "no"} then {
+	if {$title == ""} then {
+	    tk_messageBox -type "ok" -title "NO TITLE SPECIFIED" -message "Must specify a title for your post."
+	    return
+	}
+    }
+
+    # Put quotes arounf title
+    if {"$title" != ""} then {
+	set quotetitle $title
+    }
+
+    # Build command line
+    if {"$rebuild" == "no"} then {
+	set istitle ":title"
+	set ispost ":post"
+	set isinit ":init"
+	set init [file nativename $init]
+	set post [file nativename $post]
+	set rebuild ""
+	set runcmd [list exec $flog $isinit $init $istitle $quotetitle $ispost $post $isdate $date]
+	set runcmdmsg [list $flog $isinit $init $istitle $quotetitle $ispost $post $isdate $date]
+	if {"$date" == ""} then {
+	    set runcmd [list exec $flog $isinit $init $istitle $quotetitle $ispost $post]
+	    set runcmdmsg [list $flog $isinit $init $istitle $quotetitle $ispost $post]
+	}
+    } else {
+	set istitle ""
+	set ispost ""
+	set isinit ""
+	set rebuild ":rebuild"
+	set init [file nativename $init]
+	set isdate ""
+	set runcmd [list exec $flog $rebuild $init]
+	set runcmdmsg [list $flog $rebuild $init]
+    }
+
+    set sure [tk_messageBox -type "okcancel" -title "Confirm" -message "Command line:\n\n $runcmdmsg \n\nEXECUTE NOW?" -icon question]
+    switch $sure {
+	cancel return
+    }
+
+    # THE COMMAND LINE
+    catch $runcmd output
+    tk_messageBox -type "ok" -title "Done" -message "Executed:\n\n$runcmdmsg \n\n \`flog\' output:\n\n$output"
+}
+
+
+
+# rebuild?
+proc start {} {
+    pack [frame .rebuild -pady 20 -padx 20 -relief raised -bd 5]
+    pack [radiobutton .rebuild.no -text "   New post" -variable rebuild -value "no" -command norebuild]
+    pack [radiobutton .rebuild.yes -text "Rebuild blog" -variable rebuild -value "yes" -command rebuild]
+    .rebuild.no select
+}
+
+proc oy {} {
+    start
+    gui
+}
+
+oy
